@@ -3,7 +3,7 @@
 (asdf:defsystem #:ulubis-drm-gbm
   :description "DRM/GBM backend for the Ulubis Wayland compositor"
   :author "Malcolm Still"
-  :license "BSD3"
+  :license "BSD 3-Clause"
   :depends-on (#:cffi
                #:cepl.drm-gbm
 	       #:cl-libinput)
