@@ -14,15 +14,13 @@
    (libinput-context :accessor libinput-context :initarg :libinput-context :initform nil)
    (libinput-fd :accessor libinput-fd :initarg :libinput-fd :initform nil)))
 
-(defmethod initialise-backend ((backend backend-drm-gbm) width height)
+(defmethod initialise-backend ((backend backend-drm-gbm) width height devices)
   (sb-ext:disable-debugger)
   (cepl:repl width height 3.3)
   (gl:viewport 0 0 width height)
   (gl:disable :cull-face)
   (gl:disable :depth-test)
-  (initialise-libinput backend
-		       "/dev/input/event5"
-		       "/dev/input/event8"))
+  (apply #'initialise-libinput backend devices))
 
 (defun initialise-libinput (backend &rest devices)
   (with-slots (libinput-context libinput-fd) backend
