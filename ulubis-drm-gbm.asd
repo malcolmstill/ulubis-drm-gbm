@@ -5,8 +5,11 @@
   :author "Malcolm Still"
   :license "BSD 3-Clause"
   :depends-on (#:cffi
+	       #:osicat
                #:cepl.drm-gbm
-	       #:cl-libinput)
+	       #:cl-libinput
+	       #:ulubis)
   :serial t
-  :components ((:file "ulubis-drm-gbm")))
+  :components ((:file "package")
+	       (:file "ulubis-drm-gbm")))
 
