@@ -32,12 +32,11 @@
   (setf (tty-fd backend) (nix:open "/dev/tty" (logior nix:o-rdwr nix:o-noctty)))
 
   ;; Stop input from leaking to tty
-  (handler-case (syscall:ioctl (tty-fd backend) +KDSKBMUTE+ 1)
-    (nix:enotty ()
-      (with-foreign-object (kb-mode :int)
-	(syscall:ioctl (tty-fd backend) +KDGKBMODE+ kb-mode)
-	(setf *keyboard-mode* (mem-aref kb-mode :int)))
-      (syscall:ioctl (tty-fd backend) +KDSKBMODE+ +K-OFF+)))
+  (when (= -1 (syscall:ioctl (tty-fd backend) +KDSKBMUTE+ 1))
+    (with-foreign-object (kb-mode :int)
+      (syscall:ioctl (tty-fd backend) +KDGKBMODE+ kb-mode)
+      (setf *keyboard-mode* (mem-aref kb-mode :int)))
+    (syscall:ioctl (tty-fd backend) +KDSKBMODE+ +K-OFF+))
   (syscall:ioctl (tty-fd backend) +KDSETMODE+ +KD-GRAPHICS+)
   
   (cepl:repl width height 3.3)
