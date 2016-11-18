@@ -37,7 +37,8 @@
       (syscall:ioctl (tty-fd backend) +KDGKBMODE+ kb-mode)
       (setf *keyboard-mode* (mem-aref kb-mode :int)))
     (syscall:ioctl (tty-fd backend) +KDSKBMODE+ +K-OFF+))
-  (syscall:ioctl (tty-fd backend) +KDSETMODE+ +KD-GRAPHICS+)
+
+;;  (syscall:ioctl (tty-fd backend) +KDSETMODE+ +KD-GRAPHICS+)
   
   (cepl:repl width height 3.3)
   (gl:viewport 0 0 width height)
@@ -117,3 +118,30 @@
       (syscall:ioctl (tty-fd backend) +KDSKBMUTE+ 0))
   (syscall:ioctl (tty-fd backend) +KDSETMODE+ +KD-TEXT+)
   (nix:close (tty-fd backend)))
+
+(defun make-drm-event-context (vblank-callback page-flip-callback)
+  (let ((context (foreign-alloc '(:struct drm:event-context))))
+    (with-foreign-slots ((drm:version drm:vblank-handler drm:page-flip-handler) context (:struct drm:event-context))
+      (setf drm:version 2)
+      (setf drm:vblank-handler vblank-callback)
+      (setf drm:page-flip-handler page-flip-callback)
+      context)))
+
+(defun drm-fd ()
+  (cepl.drm-gbm::fd cepl.drm-gbm::*drm-gbm*))
+
+(defmethod set-scheduled (backend value)
+  (setf (cepl.drm-gbm::page-flip-scheduled? cepl.drm-gbm::*drm-gbm*) value))
+
+(defmethod get-scheduled (backend)
+  (cepl.drm-gbm::page-flip-scheduled? cepl.drm-gbm::*drm-gbm*))
+
+(defcallback drm-handle-event-callback :void ((fd :int) (mask :int) (data :pointer))
+  (drm:handle-event fd data))
+
+(defcallback on-page-flip :void ((fd :int) (sequence :uint) (tv-sec :uint) (tv-usec :uint) (user-data :pointer))
+	     (setf (cepl.drm-gbm::page-flip-scheduled? cepl.drm-gbm::*drm-gbm*) nil))
+
+(defmethod event-loop-add-drm-fd ((backend backend) event-loop)
+  (let ((context (make-drm-event-context (null-pointer) (callback on-page-flip))))
+    (wayland-server-core:wl-event-loop-add-fd event-loop (drm-fd) 1 (callback drm-handle-event-callback) context)))
