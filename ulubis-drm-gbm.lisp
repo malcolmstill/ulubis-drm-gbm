@@ -27,16 +27,17 @@
 (defconstant +KDSKBMUTE+ #x4B51)
 
 (defmethod ulubis-backend:initialise-backend ((backend backend) width height devices)
-  #+sbcl
-  (sb-ext:disable-debugger)
+  
   (setf (tty-fd backend) (nix:open "/dev/tty" (logior nix:o-rdwr nix:o-noctty)))
 
   ;; Stop input from leaking to tty
+  
   (when (= -1 (syscall:ioctl (tty-fd backend) +KDSKBMUTE+ 1))
     (with-foreign-object (kb-mode :int)
       (syscall:ioctl (tty-fd backend) +KDGKBMODE+ kb-mode)
       (setf *keyboard-mode* (mem-aref kb-mode :int)))
     (syscall:ioctl (tty-fd backend) +KDSKBMODE+ +K-OFF+))
+  
 
 ;;  (syscall:ioctl (tty-fd backend) +KDSETMODE+ +KD-GRAPHICS+)
   
