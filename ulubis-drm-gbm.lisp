@@ -13,6 +13,7 @@
    (window-event-handler :accessor window-event-handler :initarg :window-event-handler :initform (lambda ()))
    (libinput-context :accessor libinput-context :initarg :libinput-context :initform nil)
    (libinput-fd :accessor libinput-fd :initarg :libinput-fd :initform nil)
+   (draw-fn :accessor draw-fn :initarg :draw-fn :initform (lambda ()))
    (tty-fd :accessor tty-fd :initarg :tty-fd :initform nil)))
 
 (defconstant +KDSETMODE+ #x4B3A)
@@ -26,8 +27,10 @@
 (defconstant +K-OFF+ #x04)
 (defconstant +KDSKBMUTE+ #x4B51)
 
+(defparameter *this* nil)
+
 (defmethod ulubis-backend:initialise-backend ((backend backend) width height devices)
-  
+  (setf *this* backend)
   (setf (tty-fd backend) (nix:open "/dev/tty" (logior nix:o-rdwr nix:o-noctty)))
 
   ;; Stop input from leaking to tty
@@ -120,6 +123,10 @@
   (syscall:ioctl (tty-fd backend) +KDSETMODE+ +KD-TEXT+)
   (nix:close (tty-fd backend)))
 
+(defmethod event-loop-add-drm-fd ((backend backend) event-loop)
+  (let ((context (make-drm-event-context (null-pointer) (callback on-page-flip))))
+    (wayland-server-core:wl-event-loop-add-fd event-loop (drm-fd) 1 (callback drm-handle-event-callback) context)))
+
 (defun make-drm-event-context (vblank-callback page-flip-callback)
   (let ((context (foreign-alloc '(:struct drm:event-context))))
     (with-foreign-slots ((drm:version drm:vblank-handler drm:page-flip-handler) context (:struct drm:event-context))
@@ -127,6 +134,16 @@
       (setf drm:vblank-handler vblank-callback)
       (setf drm:page-flip-handler page-flip-callback)
       context)))
+
+(defmethod ulubis-backend:set-draw-function ((backend backend) draw-fn)
+    (setf (draw-fn *this*) draw-fn))
+
+(defcallback on-page-flip :void ((fd :int) (sequence :uint) (tv-sec :uint) (tv-usec :uint) (user-data :pointer))
+  (setf (cepl.drm-gbm::page-flip-scheduled? cepl.drm-gbm::*drm-gbm*) nil)
+  (funcall (draw-fn *this*)))
+
+(defcallback drm-handle-event-callback :void ((fd :int) (mask :int) (data :pointer))
+  (drm:handle-event fd data))
 
 (defun drm-fd ()
   (cepl.drm-gbm::fd cepl.drm-gbm::*drm-gbm*))
@@ -137,12 +154,5 @@
 (defmethod get-scheduled (backend)
   (cepl.drm-gbm::page-flip-scheduled? cepl.drm-gbm::*drm-gbm*))
 
-(defcallback drm-handle-event-callback :void ((fd :int) (mask :int) (data :pointer))
-  (drm:handle-event fd data))
 
-(defcallback on-page-flip :void ((fd :int) (sequence :uint) (tv-sec :uint) (tv-usec :uint) (user-data :pointer))
-	     (setf (cepl.drm-gbm::page-flip-scheduled? cepl.drm-gbm::*drm-gbm*) nil))
 
-(defmethod event-loop-add-drm-fd ((backend backend) event-loop)
-  (let ((context (make-drm-event-context (null-pointer) (callback on-page-flip))))
-    (wayland-server-core:wl-event-loop-add-fd event-loop (drm-fd) 1 (callback drm-handle-event-callback) context)))
